@@ -106,23 +106,25 @@ var CONFIG = {
     netflix:   { nombre:"Netflix",     ico:"N",  color:"#141414", appId:["3201907018807","11101200001"] },
     hbo:       { nombre:"HBO Max",     ico:"◆",  color:"#3b1d8f", appId:["3202301029760","3201601007230"] },
     prime:     { nombre:"Prime Video", ico:"⌁",  color:"#00a8e1", appId:["3201910019365","3201512006785"] },
-    tdt:       { nombre:"TDT",         ico:"📺", color:"#1f6f50", appId:"TV" },
+    tdt:       { nombre:"TDT",         ico:"📺", color:"#1f6f50", appId:"KEY_TV" },
     jellyfin:  { nombre:"Jellyfin",    ico:"🎞", color:"#6b3fa0", appId:"JELLYFIN" },
-    hdmimm:    { nombre:"Multimedia",  ico:"🔌", color:"#44536e", appId:"HDMI1" },
-    ps4:       { nombre:"PlayStation 4",ico:"🎮",color:"#003791", appId:"HDMI3" }
+    hdmimm:    { nombre:"HDMI Multimedia", ico:"🔌", color:"#44536e", appId:"KEY_HDMI2" },
+    switch:    { nombre:"Switch",      ico:"🕹", color:"#e60012", appId:"KEY_HDMI2" },
+    chromecast:{ nombre:"Chromecast",  ico:"📡", color:"#4285f4", appId:"KEY_HDMI1" },
+    ps4:       { nombre:"PlayStation 4",ico:"🎮",color:"#003791", appId:"KEY_HDMI3" }
   },
 
   perfiles: [
     { id:"familia", nombre:"Familia", color:"#1f9e9e", inicial:"👨‍👩‍👧‍👦",
       apps:["tdt","netflix","tizentube","jellyfin","hdmimm"] },
     { id:"carmelo", nombre:"Carmelo", color:"#2f6fd6", inicial:"C",
-      apps:["tizentube","netflix","hbo","prime","tdt","jellyfin","hdmimm","ps4"] },
+      apps:["tizentube","netflix","hbo","prime","tdt","jellyfin","hdmimm","ps4","chromecast"] },
     { id:"mara",    nombre:"Mara",    color:"#c2477e", inicial:"M",
       apps:["tdt","netflix","tizentube","hdmimm"] },
     { id:"laura",   nombre:"Laura",   color:"#8a4fd8", inicial:"L", peque:true,
       apps:["tizentube","netflix","tdt"] },
     { id:"pablo",   nombre:"Pablo",   color:"#f07a1a", inicial:"P", peque:true,
-      apps:["ps4","tizentube","netflix","tdt","hdmimm"] }
+      apps:["ps4","tizentube","netflix","tdt","switch"] }
   ],
 
   // Frases para los peques. Grupos de frases + horario que las activa.
@@ -284,11 +286,46 @@ function abrirTizenTube(){
     ws.onerror=function(){ toast("No he podido hablar con TizenBrew"); };
   }).catch(function(){ toast("Sin conexión para abrir YouTube"); });
 }
+/* Mando a distancia interno de la tele (API de Samsung en el puerto 8001).
+   Sirve para abrir apps por su número y para pulsar teclas como TV o HDMI. */
+var MANDO=null, MANDO_COLA=[];
+function mando(){
+  if(MANDO && MANDO.readyState<2) return MANDO;
+  var nombre=btoa("Inicio Familia");
+  MANDO=new WebSocket("ws://127.0.0.1:8001/api/v2/channels/samsung.remote.control?name="+nombre);
+  MANDO.onopen=function(){ while(MANDO_COLA.length) MANDO.send(MANDO_COLA.shift()); };
+  MANDO.onmessage=function(e){ ULTIMO_ERROR="Mando: "+String(e.data).slice(0,200); };
+  MANDO.onerror=function(){ ULTIMO_ERROR="No conecta con el mando interno (8001)"; toast("La tele no deja usar el mando interno"); };
+  return MANDO;
+}
+function enviar(obj){
+  var m=mando(), txt=JSON.stringify(obj);
+  if(m.readyState===1) m.send(txt); else MANDO_COLA.push(txt);
+}
+function pulsarTecla(k){
+  enviar({method:"ms.remote.control",params:{Cmd:"Click",DataOfCmd:k,Option:"false",TypeOfRemote:"SendRemoteKey"}});
+}
+function abrirPorNumero(ids, nombre){
+  // 1) Petición directa a la API de apps
+  ids.forEach(function(id){
+    try{ fetch("http://127.0.0.1:8001/api/v2/applications/"+id,{method:"POST",mode:"no-cors"}); }catch(e){}
+  });
+  // 2) Y por el canal del mando, por si la anterior no vale en este modelo
+  ids.forEach(function(id){
+    enviar({method:"ms.channel.emit",params:{event:"ed.apps.launch",to:"host",
+      data:{appId:id,action_type:"DEEP_LINK"}}});
+  });
+  toast("Abriendo "+nombre+"…");
+}
 function launch(key){
   var a=CONFIG.apps[key];
-  if(!(window.tizen && tizen.application)){ toast("Aquí se abriría: "+a.nombre); return; }
   if(a.appId==="TIZENTUBE"){ abrirTizenTube(); return; }
-  if(Array.isArray(a.appId)){ probarIds(a.appId,0,a.nombre); return; }
+  if(typeof a.appId==="string" && a.appId.indexOf("KEY_")===0){ pulsarTecla(a.appId); toast(a.nombre); return; }
+  if(Array.isArray(a.appId)){
+    if(window.tizen && tizen.application){ probarIds(a.appId,0,a.nombre); }
+    else abrirPorNumero(a.appId, a.nombre);
+    return;
+  }
   toast(a.nombre+": todavía no sé cómo abrirlo desde aquí");
 }
 /* Pantalla de diagnóstico: tecla 0 */
