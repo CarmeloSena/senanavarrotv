@@ -98,6 +98,7 @@
    ===================================================================== */
 var CONFIG = {
   ciudad: { nombre: "Valencia", lat: 39.4699, lon: -0.3763 },
+  ipTele: "192.168.2.119",   // IP de la tele en casa (Ajustes → Conexión → Red → Estado)
 
   // Catálogo de botones. appId = identificador de la app en la tele
   // (los rellenamos con los reales cuando lo instalemos).
@@ -305,19 +306,26 @@ function abrirMando(url, siFalla){
     try{ var d=JSON.parse(e.data); if(d.data && d.data.token) localStorage.setItem("tokenMando", d.data.token); }catch(x){}
   };
   ws.onerror=function(){
-    ULTIMO_ERROR="No conecta: "+url.split("?")[0];
+    ULTIMO_ERROR="Probado sin éxito: "+INTENTOS_MANDO.join("  |  ");
     if(siFalla) siFalla(); else toast("La tele no deja usar el mando interno");
   };
   return ws;
 }
+var INTENTOS_MANDO=[];
 function mando(){
   if(MANDO && MANDO.readyState<2) return MANDO;
   var nombre=btoa("Inicio Familia"), token="";
   try{ token=localStorage.getItem("tokenMando")||""; }catch(e){}
   var q="/api/v2/channels/samsung.remote.control?name="+nombre+(token?"&token="+token:"");
-  MANDO=abrirMando("ws://127.0.0.1:8001"+q, function(){
-    MANDO=abrirMando("wss://127.0.0.1:8002"+q, null);
-  });
+  var ip=CONFIG.ipTele;
+  var urls=["ws://"+ip+":8001"+q, "ws://127.0.0.1:8001"+q, "wss://"+ip+":8002"+q, "wss://127.0.0.1:8002"+q];
+  INTENTOS_MANDO=[];
+  function probar(i){
+    if(i>=urls.length){ toast("La tele no deja usar el mando interno"); return; }
+    INTENTOS_MANDO.push(urls[i].split("/api")[0]);
+    MANDO=abrirMando(urls[i], function(){ probar(i+1); });
+  }
+  probar(0);
   return MANDO;
 }
 function enviar(obj){
@@ -330,7 +338,7 @@ function pulsarTecla(k){
 function abrirPorNumero(ids, nombre){
   // 1) Petición directa a la API de apps
   ids.forEach(function(id){
-    try{ fetch("http://127.0.0.1:8001/api/v2/applications/"+id,{method:"POST",mode:"no-cors"}); }catch(e){}
+    try{ fetch("http://"+CONFIG.ipTele+":8001/api/v2/applications/"+id,{method:"POST",mode:"no-cors"}); fetch("http://127.0.0.1:8001/api/v2/applications/"+id,{method:"POST",mode:"no-cors"}); }catch(e){}
   });
   // 2) Y por el canal del mando, por si la anterior no vale en este modelo
   ids.forEach(function(id){
