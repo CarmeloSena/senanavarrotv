@@ -296,18 +296,33 @@ function abrirTizenTube(){
 /* Mando a distancia interno de la tele (API de Samsung en el puerto 8001).
    Sirve para abrir apps por su número y para pulsar teclas como TV o HDMI. */
 var MANDO=null, MANDO_COLA=[];
+function abrirMando(url, siFalla){
+  var ws;
+  try{ ws=new WebSocket(url); }catch(e){ if(siFalla) siFalla(); return null; }
+  ws.onopen=function(){ while(MANDO_COLA.length) ws.send(MANDO_COLA.shift()); };
+  ws.onmessage=function(e){
+    ULTIMO_ERROR="Mando ("+url.split("/")[2]+"): "+String(e.data).slice(0,200);
+    try{ var d=JSON.parse(e.data); if(d.data && d.data.token) localStorage.setItem("tokenMando", d.data.token); }catch(x){}
+  };
+  ws.onerror=function(){
+    ULTIMO_ERROR="No conecta: "+url.split("?")[0];
+    if(siFalla) siFalla(); else toast("La tele no deja usar el mando interno");
+  };
+  return ws;
+}
 function mando(){
   if(MANDO && MANDO.readyState<2) return MANDO;
-  var nombre=btoa("Inicio Familia");
-  MANDO=new WebSocket("ws://127.0.0.1:8001/api/v2/channels/samsung.remote.control?name="+nombre);
-  MANDO.onopen=function(){ while(MANDO_COLA.length) MANDO.send(MANDO_COLA.shift()); };
-  MANDO.onmessage=function(e){ ULTIMO_ERROR="Mando: "+String(e.data).slice(0,200); };
-  MANDO.onerror=function(){ ULTIMO_ERROR="No conecta con el mando interno (8001)"; toast("La tele no deja usar el mando interno"); };
+  var nombre=btoa("Inicio Familia"), token="";
+  try{ token=localStorage.getItem("tokenMando")||""; }catch(e){}
+  var q="/api/v2/channels/samsung.remote.control?name="+nombre+(token?"&token="+token:"");
+  MANDO=abrirMando("ws://127.0.0.1:8001"+q, function(){
+    MANDO=abrirMando("wss://127.0.0.1:8002"+q, null);
+  });
   return MANDO;
 }
 function enviar(obj){
   var m=mando(), txt=JSON.stringify(obj);
-  if(m.readyState===1) m.send(txt); else MANDO_COLA.push(txt);
+  if(m && m.readyState===1) m.send(txt); else MANDO_COLA.push(txt);
 }
 function pulsarTecla(k){
   enviar({method:"ms.remote.control",params:{Cmd:"Click",DataOfCmd:k,Option:"false",TypeOfRemote:"SendRemoteKey"}});

@@ -4,7 +4,12 @@
 display:flex;align-items:center;justify-content:center;height:100%}</style></head>
 <body>Cargando Inicio Familia…
 <script>
-// Este archivo no cambia nunca: solo lleva a la versión actual del launcher,
-// que está publicada en GitHub Pages y se actualiza en pocos minutos.
-location.replace("https://carmelosena.github.io/senanavarrotv/launcher.html?v=" + Date.now());
+// Cargador fijo: descarga la versión actual de launcher.html desde GitHub y la pinta
+// AQUÍ MISMO, para seguir en una página "http" local (la tele solo deja usar su
+// mando interno desde páginas http, no desde https).
+var URL_LAUNCHER = "https://raw.githubusercontent.com/CarmeloSena/senanavarrotv/main/launcher.html";
+fetch(URL_LAUNCHER + "?v=" + Date.now(), { cache: "no-store" })
+  .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+  .then(function (html) { document.open(); document.write(html); document.close(); })
+  .catch(function (e) { document.body.textContent = "No he podido cargar el launcher (" + e.message + ")"; });
 </script></body></html>
