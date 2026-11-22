@@ -1,7 +1,7 @@
 {
   "name": "inicio-familia",
   "appName": "Inicio Familia",
-  "version": "3.0.0",
+  "version": "2.1.0",
   "description": "Launcher familiar con perfiles para la tele de casa.",
   "packageType": "app",
   "appPath": "index.html",
