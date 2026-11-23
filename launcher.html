@@ -113,7 +113,7 @@ var CONFIG = {
     hbo:       { nombre:"HBO Max",     ico:"◆",  color:"#3b1d8f", appId:["3201601007230"] },
     prime:     { nombre:"Prime Video", ico:"⌁",  color:"#00a8e1", appId:["3201910019365"] },
     tdt:       { nombre:"TDT",         ico:"📺", color:"#1f6f50", fuente:"digital_tv" },
-    jellyfin:  { nombre:"Jellyfin",    ico:"🎞", color:"#6b3fa0", appId:"JELLYFIN" },
+    jellyfin:  { nombre:"Jellyfin",    ico:"🎞", color:"#6b3fa0", modulo:"npm/@elfpie/jellyfin-tizen", ruta:"index.html" },
     hdmimm:    { nombre:"HDMI Multimedia", ico:"🔌", color:"#44536e", fuente:"hdmi2" },
     switch:    { nombre:"Switch",      ico:"🕹", color:"#e60012", fuente:"hdmi2",
                  aviso:"Si la Switch está apagada, despiértala con el botón HOME del mando 🕹️" },
@@ -320,8 +320,14 @@ function mostrarAviso(texto){
   el.textContent=texto; el.style.display="flex";
   clearTimeout(el._t); el._t=setTimeout(function(){ el.style.display="none"; },9000);
 }
+/* Abre otro módulo de TizenBrew (p. ej. Jellyfin) dentro de la propia TizenBrew */
+function abrirModulo(a){
+  toast("Abriendo "+a.nombre+"…");
+  location.href="http://127.0.0.1:8081/module/"+encodeURIComponent(a.modulo)+"/"+a.ruta;
+}
 function launch(key){
   var a=CONFIG.apps[key];
+  if(a.modulo){ abrirModulo(a); return; }
   if(a.fuente){
     pedirHA("accion=fuente&fuente="+encodeURIComponent(a.fuente));
     toast(a.nombre);
