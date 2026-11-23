@@ -121,8 +121,13 @@ http.createServer(function (req, res) {
     mandar({ method: 'ms.channel.emit', params: { event: 'ed.apps.launch', to: 'host', data: { appId: q.id, action_type: 'DEEP_LINK' } } });
     // Por si acaso, también por la API sencilla de apps
     ['127.0.0.1', IP_TELE].forEach(function (host) {
-      var r = http.request({ host: host, port: 8001, method: 'POST', path: '/api/v2/applications/' + q.id });
-      r.on('error', function () {}); r.end();
+      var r = http.request({ host: host, port: 8001, method: 'POST', path: '/api/v2/applications/' + q.id,
+        headers: { 'Content-Length': 0, 'Accept': '*/*', 'User-Agent': 'curl/8.7.1' } }, function (resp) {
+        var cuerpo = ''; resp.on('data', function (t) { cuerpo += t; });
+        resp.on('end', function () { ultimoMensaje = 'App ' + q.id + ' via ' + host + ': HTTP ' + resp.statusCode + ' ' + cuerpo.slice(0, 150); });
+      });
+      r.on('error', function (e) { ultimoMensaje = 'App ' + q.id + ' via ' + host + ': ' + e.message; });
+      r.end();
     });
   } else if (url.pathname === '/conectar') {
     conectar();
