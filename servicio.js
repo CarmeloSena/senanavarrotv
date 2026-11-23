@@ -32,10 +32,10 @@ function conectar() {
   var cabeceraRecibida = false;
   buffer = new Buffer(0);
 
-  socket = tls.connect({ host: '127.0.0.1', port: 8002, rejectUnauthorized: false }, function () {
+  socket = tls.connect({ host: IP_TELE, port: 8002, rejectUnauthorized: false }, function () {
     socket.write(
       'GET ' + ruta + ' HTTP/1.1\r\n' +
-      'Host: 127.0.0.1:8002\r\n' +
+      'Host: ' + IP_TELE + ':8002\r\n' +
       'Upgrade: websocket\r\nConnection: Upgrade\r\n' +
       'Sec-WebSocket-Key: ' + clave + '\r\n' +
       'Sec-WebSocket-Version: 13\r\n\r\n');
