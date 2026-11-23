@@ -105,6 +105,7 @@ var CONFIG = {
   apps: {
     tizentube: { nombre:"YouTube",     ico:"▶",  color:"#c4302b", appId:"TIZENTUBE" },
     netflix:   { nombre:"Netflix",     ico:"N",  color:"#141414", appId:["3201907018807","11101200001"] },
+    disney:    { nombre:"Disney+",     ico:"✦",  color:"#0e2a6b", appId:["3201901017640"] },
     hbo:       { nombre:"HBO Max",     ico:"◆",  color:"#3b1d8f", appId:["3202301029760","3201601007230"] },
     prime:     { nombre:"Prime Video", ico:"⌁",  color:"#00a8e1", appId:["3201910019365","3201512006785"] },
     tdt:       { nombre:"TDT",         ico:"📺", color:"#1f6f50", appId:"KEY_TV" },
@@ -119,13 +120,13 @@ var CONFIG = {
     { id:"familia", nombre:"Familia", color:"#1f9e9e", inicial:"👨‍👩‍👧‍👦",
       apps:["tdt","netflix","tizentube","jellyfin","hdmimm"] },
     { id:"carmelo", nombre:"Carmelo", color:"#2f6fd6", inicial:"C",
-      apps:["tizentube","netflix","hbo","prime","tdt","jellyfin","hdmimm","ps4","chromecast"] },
+      apps:["tizentube","netflix","disney","hbo","prime","tdt","jellyfin","hdmimm","ps4","chromecast"] },
     { id:"mara",    nombre:"Mara",    color:"#c2477e", inicial:"M",
       apps:["tdt","netflix","tizentube","hdmimm"] },
     { id:"laura",   nombre:"Laura",   color:"#8a4fd8", inicial:"L", peque:true,
-      apps:["tizentube","netflix","tdt"] },
+      apps:["tizentube","netflix","disney","tdt"] },
     { id:"pablo",   nombre:"Pablo",   color:"#f07a1a", inicial:"P", peque:true,
-      apps:["ps4","tizentube","netflix","tdt","switch"] }
+      apps:["ps4","tizentube","netflix","disney","tdt","switch"] }
   ],
 
   // Frases para los peques. Grupos de frases + horario que las activa.
@@ -332,19 +333,17 @@ function enviar(obj){
   var m=mando(), txt=JSON.stringify(obj);
   if(m && m.readyState===1) m.send(txt); else MANDO_COLA.push(txt);
 }
-function pulsarTecla(k){
-  enviar({method:"ms.remote.control",params:{Cmd:"Click",DataOfCmd:k,Option:"false",TypeOfRemote:"SendRemoteKey"}});
+/* El servicio de la tele (servicio.js) hace de puente con el mando interno cifrado */
+var SERVICIO="http://127.0.0.1:8095";
+function pedirServicio(ruta){
+  return fetch(SERVICIO+ruta).then(function(r){return r.json();}).then(function(j){
+    ULTIMO_ERROR="Servicio: "+j.estado+(j.hayToken?" (con permiso guardado)":"")+"\n"+(j.ultimoMensaje||"");
+    return j;
+  }).catch(function(){ ULTIMO_ERROR="El servicio de la tele no responde (puerto 8095)"; toast("El servicio aún no está listo"); });
 }
+function pulsarTecla(k){ pedirServicio("/tecla?k="+encodeURIComponent(k)); }
 function abrirPorNumero(ids, nombre){
-  // 1) Petición directa a la API de apps
-  ids.forEach(function(id){
-    try{ fetch("http://"+CONFIG.ipTele+":8001/api/v2/applications/"+id,{method:"POST",mode:"no-cors"}); fetch("http://127.0.0.1:8001/api/v2/applications/"+id,{method:"POST",mode:"no-cors"}); }catch(e){}
-  });
-  // 2) Y por el canal del mando, por si la anterior no vale en este modelo
-  ids.forEach(function(id){
-    enviar({method:"ms.channel.emit",params:{event:"ed.apps.launch",to:"host",
-      data:{appId:id,action_type:"DEEP_LINK"}}});
-  });
+  ids.forEach(function(id){ pedirServicio("/app?id="+encodeURIComponent(id)); });
   toast("Abriendo "+nombre+"…");
 }
 function launch(key){
@@ -360,6 +359,7 @@ function launch(key){
 }
 /* Pantalla de diagnóstico: tecla 0 */
 function diagnostico(){
+  pedirServicio("/estado");
   var t="ÚLTIMO ERROR:\n"+(ULTIMO_ERROR||"ninguno")+"\n\nBOTONES:\n";
   Object.keys(CONFIG.apps).forEach(function(k){ t+=CONFIG.apps[k].nombre+"  →  "+CONFIG.apps[k].appId+"\n"; });
   var d=document.getElementById("diag");
