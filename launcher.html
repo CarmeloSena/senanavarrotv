@@ -337,7 +337,7 @@ function enviar(obj){
 var SERVICIO="http://127.0.0.1:8095";
 function pedirServicio(ruta){
   return fetch(SERVICIO+ruta).then(function(r){return r.json();}).then(function(j){
-    ULTIMO_ERROR="Servicio: "+j.estado+(j.hayToken?" (con permiso guardado)":"")+"\n"+(j.ultimoMensaje||"");
+    ULTIMO_ERROR="Servicio: "+j.estado+(j.hayToken?" (con permiso guardado)":"")+"\n"+(j.ultimoMensaje||"")+"\nAPPS: "+(j.ultimaApp||"");
     return j;
   }).catch(function(){ ULTIMO_ERROR="El servicio de la tele no responde (puerto 8095)"; toast("El servicio aún no está listo"); });
 }

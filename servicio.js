@@ -21,7 +21,7 @@ var token = '14818075'; // token concedido por la tele a "Inicio Familia" (23/11
 try { token = fs.readFileSync(FICHERO_TOKEN, 'utf8').trim() || token; } catch (e) {}
 
 var socket = null, conectado = false, cola = [], buffer = new Buffer(0);
-var estado = 'sin conectar', ultimoMensaje = '';
+var estado = 'sin conectar', ultimoMensaje = '', ultimaApp = 'ninguna todavía';
 
 // ---------- WebSocket mínimo sobre TLS ----------
 function conectar() {
@@ -124,15 +124,15 @@ http.createServer(function (req, res) {
       var r = http.request({ host: host, port: 8001, method: 'POST', path: '/api/v2/applications/' + q.id,
         headers: { 'Content-Length': 0, 'Accept': '*/*', 'User-Agent': 'curl/8.7.1' } }, function (resp) {
         var cuerpo = ''; resp.on('data', function (t) { cuerpo += t; });
-        resp.on('end', function () { ultimoMensaje = 'App ' + q.id + ' via ' + host + ': HTTP ' + resp.statusCode + ' ' + cuerpo.slice(0, 150); });
+        resp.on('end', function () { ultimaApp = 'App ' + q.id + ' via ' + host + ': HTTP ' + resp.statusCode + ' ' + cuerpo.slice(0, 150); });
       });
-      r.on('error', function (e) { ultimoMensaje = 'App ' + q.id + ' via ' + host + ': ' + e.message; });
+      r.on('error', function (e) { ultimaApp = 'App ' + q.id + ' via ' + host + ': ' + e.message; });
       r.end();
     });
   } else if (url.pathname === '/conectar') {
     conectar();
   }
-  res.end(JSON.stringify({ estado: estado, conectado: conectado, hayToken: !!token, ultimoMensaje: ultimoMensaje }));
+  res.end(JSON.stringify({ estado: estado, conectado: conectado, hayToken: !!token, ultimoMensaje: ultimoMensaje, ultimaApp: ultimaApp }));
 }).listen(PUERTO, '127.0.0.1');
 
 conectar();
