@@ -89,6 +89,9 @@
 
 <div class="logo">CS</div>
 <div id="toast"></div>
+<div id="aviso" style="display:none;position:absolute;inset:0;background:#0b1430ee;color:#fff;
+  font-size:64px;font-weight:600;text-align:center;align-items:center;justify-content:center;
+  padding:0 160px;line-height:1.3"></div>
 <pre id="diag" style="display:none;position:absolute;inset:60px;background:#000e;color:#9f9;
   font-size:24px;padding:40px;overflow:auto;border-radius:20px;white-space:pre-wrap"></pre>
 
@@ -98,7 +101,8 @@
    ===================================================================== */
 var CONFIG = {
   ciudad: { nombre: "Valencia", lat: 39.4699, lon: -0.3763 },
-  ipTele: "192.168.2.119",   // IP de la tele en casa (Ajustes → Conexión → Red → Estado)
+  // Home Assistant: recibe las órdenes y se las da a la tele
+  homeAssistant: "http://192.168.1.111:8123/api/webhook/inicio_familia_tv",
 
   // Catálogo de botones. appId = identificador de la app en la tele
   // (los rellenamos con los reales cuando lo instalemos).
@@ -108,12 +112,14 @@ var CONFIG = {
     disney:    { nombre:"Disney+",     ico:"✦",  color:"#0e2a6b", appId:["3201901017640"] },
     hbo:       { nombre:"HBO Max",     ico:"◆",  color:"#3b1d8f", appId:["3201601007230"] },
     prime:     { nombre:"Prime Video", ico:"⌁",  color:"#00a8e1", appId:["3201910019365"] },
-    tdt:       { nombre:"TDT",         ico:"📺", color:"#1f6f50", appId:"KEY_TV" },
+    tdt:       { nombre:"TDT",         ico:"📺", color:"#1f6f50", fuente:"digital_tv" },
     jellyfin:  { nombre:"Jellyfin",    ico:"🎞", color:"#6b3fa0", appId:"JELLYFIN" },
-    hdmimm:    { nombre:"HDMI Multimedia", ico:"🔌", color:"#44536e", appId:"KEY_HDMI2" },
-    switch:    { nombre:"Switch",      ico:"🕹", color:"#e60012", appId:"KEY_HDMI2" },
-    chromecast:{ nombre:"Chromecast",  ico:"📡", color:"#4285f4", appId:"KEY_HDMI1" },
-    ps4:       { nombre:"PlayStation 4",ico:"🎮",color:"#003791", appId:"KEY_HDMI3" }
+    hdmimm:    { nombre:"HDMI Multimedia", ico:"🔌", color:"#44536e", fuente:"hdmi2" },
+    switch:    { nombre:"Switch",      ico:"🕹", color:"#e60012", fuente:"hdmi2",
+                 aviso:"Si la Switch está apagada, despiértala con el botón HOME del mando 🕹️" },
+    chromecast:{ nombre:"Chromecast",  ico:"📡", color:"#4285f4", fuente:"hdmi1" },
+    ps4:       { nombre:"PlayStation 4",ico:"🎮",color:"#003791", fuente:"hdmi3",
+                 aviso:"Si la PlayStation está apagada, enciéndela con el botón PS del mando 🎮" }
   },
 
   perfiles: [
@@ -295,73 +301,45 @@ function abrirTizenTube(){
     ws.onerror=function(){ toast("No he podido hablar con TizenBrew"); };
   }).catch(function(){ toast("Sin conexión para abrir YouTube"); });
 }
-/* Mando a distancia interno de la tele (API de Samsung en el puerto 8001).
-   Sirve para abrir apps por su número y para pulsar teclas como TV o HDMI. */
-var MANDO=null, MANDO_COLA=[];
-function abrirMando(url, siFalla){
-  var ws;
-  try{ ws=new WebSocket(url); }catch(e){ if(siFalla) siFalla(); return null; }
-  ws.onopen=function(){ while(MANDO_COLA.length) ws.send(MANDO_COLA.shift()); };
-  ws.onmessage=function(e){
-    ULTIMO_ERROR="Mando ("+url.split("/")[2]+"): "+String(e.data).slice(0,200);
-    try{ var d=JSON.parse(e.data); if(d.data && d.data.token) localStorage.setItem("tokenMando", d.data.token); }catch(x){}
-  };
-  ws.onerror=function(){
-    ULTIMO_ERROR="Probado sin éxito: "+INTENTOS_MANDO.join("  |  ");
-    if(siFalla) siFalla(); else toast("La tele no deja usar el mando interno");
-  };
-  return ws;
+/* Las órdenes van a Home Assistant, que es quien manda a la tele
+   (la tele no obedece órdenes que salen de ella misma). */
+function pedirHA(params, nombre){
+  var url=CONFIG.homeAssistant+"?"+params+"&t="+Date.now();
+  fetch(url,{method:"GET",mode:"no-cors"}).then(function(){
+    ULTIMO_ERROR="Enviado a Home Assistant: "+params;
+  }).catch(function(e){
+    ULTIMO_ERROR="Home Assistant no responde: "+e.message;
+    toast("Home Assistant no responde");
+  });
+  if(nombre) toast("Abriendo "+nombre+"…");
 }
-var INTENTOS_MANDO=[];
-function mando(){
-  if(MANDO && MANDO.readyState<2) return MANDO;
-  var nombre=btoa("Inicio Familia"), token="";
-  try{ token=localStorage.getItem("tokenMando")||""; }catch(e){}
-  var q="/api/v2/channels/samsung.remote.control?name="+nombre+(token?"&token="+token:"");
-  var ip=CONFIG.ipTele;
-  var urls=["ws://"+ip+":8001"+q, "ws://127.0.0.1:8001"+q, "wss://"+ip+":8002"+q, "wss://127.0.0.1:8002"+q];
-  INTENTOS_MANDO=[];
-  function probar(i){
-    if(i>=urls.length){ toast("La tele no deja usar el mando interno"); return; }
-    INTENTOS_MANDO.push(urls[i].split("/api")[0]);
-    MANDO=abrirMando(urls[i], function(){ probar(i+1); });
-  }
-  probar(0);
-  return MANDO;
-}
-function enviar(obj){
-  var m=mando(), txt=JSON.stringify(obj);
-  if(m && m.readyState===1) m.send(txt); else MANDO_COLA.push(txt);
-}
-/* El servicio de la tele (servicio.js) hace de puente con el mando interno cifrado */
-var SERVICIO="http://127.0.0.1:8095";
-function pedirServicio(ruta){
-  return fetch(SERVICIO+ruta).then(function(r){return r.json();}).then(function(j){
-    ULTIMO_ERROR="Servicio: "+j.estado+(j.hayToken?" (con permiso guardado)":"")+"\n"+(j.ultimoMensaje||"")+"\nAPPS: "+(j.ultimaApp||"");
-    return j;
-  }).catch(function(){ ULTIMO_ERROR="El servicio de la tele no responde (puerto 8095)"; toast("El servicio aún no está listo"); });
-}
-function pulsarTecla(k){ pedirServicio("/tecla?k="+encodeURIComponent(k)); }
-function abrirPorNumero(ids, nombre){
-  ids.forEach(function(id){ pedirServicio("/app?id="+encodeURIComponent(id)); });
-  toast("Abriendo "+nombre+"…");
+function pulsarTecla(k){ pedirHA("accion=tecla&tecla="+encodeURIComponent(k)); }
+function abrirPorNumero(ids, nombre){ pedirHA("accion=app&id="+encodeURIComponent(ids[0]), nombre); }
+function mostrarAviso(texto){
+  var el=document.getElementById("aviso");
+  el.textContent=texto; el.style.display="flex";
+  clearTimeout(el._t); el._t=setTimeout(function(){ el.style.display="none"; },9000);
 }
 function launch(key){
   var a=CONFIG.apps[key];
+  if(a.fuente){
+    pedirHA("accion=fuente&fuente="+encodeURIComponent(a.fuente));
+    toast(a.nombre);
+    if(a.aviso) setTimeout(function(){ mostrarAviso(a.aviso); },1200);
+    return;
+  }
   if(a.appId==="TIZENTUBE"){ abrirTizenTube(); return; }
   if(typeof a.appId==="string" && a.appId.indexOf("KEY_")===0){ pulsarTecla(a.appId); toast(a.nombre); return; }
   if(Array.isArray(a.appId)){
-    if(window.tizen && tizen.application){ probarIds(a.appId,0,a.nombre); }
-    else abrirPorNumero(a.appId, a.nombre);
+    abrirPorNumero(a.appId, a.nombre);
     return;
   }
   toast(a.nombre+": todavía no sé cómo abrirlo desde aquí");
 }
 /* Pantalla de diagnóstico: tecla 0 */
 function diagnostico(){
-  pedirServicio("/estado");
   var t="ÚLTIMO ERROR:\n"+(ULTIMO_ERROR||"ninguno")+"\n\nBOTONES:\n";
-  Object.keys(CONFIG.apps).forEach(function(k){ t+=CONFIG.apps[k].nombre+"  →  "+CONFIG.apps[k].appId+"\n"; });
+  Object.keys(CONFIG.apps).forEach(function(k){ t+=CONFIG.apps[k].nombre+"  →  "+(CONFIG.apps[k].fuente||CONFIG.apps[k].appId)+"\n"; });
   var d=document.getElementById("diag");
   d.textContent=t; d.style.display = d.style.display==="block" ? "none" : "block";
 }
