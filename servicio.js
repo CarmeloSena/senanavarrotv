@@ -13,11 +13,12 @@ var crypto = require('crypto');
 var fs = require('fs');
 
 var PUERTO = 8095;
+var IP_TELE = '192.168.2.119';
 var FICHERO_TOKEN = '/home/owner/share/inicioFamiliaToken.txt';
 var NOMBRE = new Buffer('Inicio Familia').toString('base64');
 
-var token = '';
-try { token = fs.readFileSync(FICHERO_TOKEN, 'utf8').trim(); } catch (e) {}
+var token = '14818075'; // token concedido por la tele a "Inicio Familia" (23/11/2026)
+try { token = fs.readFileSync(FICHERO_TOKEN, 'utf8').trim() || token; } catch (e) {}
 
 var socket = null, conectado = false, cola = [], buffer = new Buffer(0);
 var estado = 'sin conectar', ultimoMensaje = '';
@@ -119,8 +120,10 @@ http.createServer(function (req, res) {
   } else if (url.pathname === '/app' && q.id) {
     mandar({ method: 'ms.channel.emit', params: { event: 'ed.apps.launch', to: 'host', data: { appId: q.id, action_type: 'DEEP_LINK' } } });
     // Por si acaso, también por la API sencilla de apps
-    var r = http.request({ host: '127.0.0.1', port: 8001, method: 'POST', path: '/api/v2/applications/' + q.id });
-    r.on('error', function () {}); r.end();
+    ['127.0.0.1', IP_TELE].forEach(function (host) {
+      var r = http.request({ host: host, port: 8001, method: 'POST', path: '/api/v2/applications/' + q.id });
+      r.on('error', function () {}); r.end();
+    });
   } else if (url.pathname === '/conectar') {
     conectar();
   }
